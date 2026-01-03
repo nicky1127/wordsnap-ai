@@ -7,17 +7,24 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
+# Install production dependencies only
 RUN npm ci --only=production
 
 # Copy application code
-COPY . .
+COPY src ./src
 
-# Expose port
+# Create non-root user for security
+RUN useradd -m -u 1001 nodeuser && \
+	chown -R nodeuser:nodeuser /app
+
+USER nodeuser
+
+# Expose port 8080 (Cloud Run requirement)
 EXPOSE 8080
 
-# Set environment to production
-ENV NODE_ENV=production
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+	CMD node -e "require('http').get('http://localhost:8080/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
 
-# Start the application
+# Start application
 CMD ["node", "src/server.js"]

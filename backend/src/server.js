@@ -24,12 +24,27 @@ const app = express();
 app.use(helmet());
 
 // CORS configuration
-app.use(
-  cors({
-    origin: config.cors.origin,
-    credentials: true,
-  })
-);
+// CORS configuration
+const corsOptions = {
+  origin: (origin, callback) => {
+    const allowedOrigins = [
+      config.cors.origin, // From .env
+      "http://localhost:5173", // Local development
+      "http://localhost:4173", // Local preview
+    ];
+
+    // Allow requests with no origin (mobile apps, Postman, etc.)
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
+  credentials: true,
+  optionsSuccessStatus: 200,
+};
+
+app.use(cors(corsOptions));
 
 // Body parsing middleware
 app.use(express.json({ limit: "10mb" }));

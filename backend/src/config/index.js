@@ -5,6 +5,10 @@ const path = require("path");
 dotenv.config();
 
 const config = {
+  server: {
+    port: process.env.PORT || 8080, // Cloud Run uses PORT env var
+    env: process.env.NODE_ENV || "development",
+  },
   // Server
   port: process.env.PORT || 8080,
   nodeEnv: process.env.NODE_ENV || "development",
