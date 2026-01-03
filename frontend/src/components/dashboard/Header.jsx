@@ -23,6 +23,8 @@ export default function Header() {
     }
   };
 
+  console.log("user", user);
+
   return (
     <header className="border-b border-border bg-card">
       <div className="container mx-auto px-4 py-4">
@@ -81,8 +83,15 @@ export default function Header() {
                 {user?.photoURL ? (
                   <img
                     src={user.photoURL}
-                    alt={user.displayName}
-                    className="w-8 h-8 rounded-full"
+                    alt={user.displayName || "User"}
+                    className="w-8 h-8 rounded-full ring-2 ring-primary/20 hover:ring-primary/40 transition-all"
+                    referrerPolicy="no-referrer"
+                    crossOrigin="anonymous"
+                    onError={(e) => {
+                      // Fallback if image fails to load
+                      console.warn("Failed to load profile image:", e);
+                      e.target.style.display = "none";
+                    }}
                   />
                 ) : (
                   <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
