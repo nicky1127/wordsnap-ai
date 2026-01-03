@@ -2,7 +2,8 @@ import axios from "axios";
 import { auth } from "./firebase";
 
 const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
+  import.meta.env.VITE_API_BASE_URL ||
+  "https://wordsnap-backend-763810149974.us-central1.run.app";
 
 const api = axios.create({
   baseURL: API_BASE_URL,
