@@ -14,6 +14,9 @@ const { apiLimiter } = require("./middleware/rateLimit.middleware");
 const healthRoutes = require("./routes/health.routes");
 const generateRoutes = require("./routes/generate.routes");
 
+// Initialize Firebase Admin (IMPORTANT - do this early)
+require("./config/firebase");
+
 // Create Express app
 const app = express();
 

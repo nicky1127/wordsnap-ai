@@ -1,4 +1,5 @@
 import axios from "axios";
+import { auth } from "./firebase";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
@@ -10,14 +11,43 @@ const api = axios.create({
   },
 });
 
-api.interceptors.request.use((config) => {
-  config.headers["x-user-id"] = localStorage.getItem("userId") || "demo-user";
-  return config;
-});
+// Request interceptor to add Firebase auth token
+api.interceptors.request.use(
+  async (config) => {
+    try {
+      // Get current Firebase user
+      const user = auth.currentUser;
 
+      if (user) {
+        // Get fresh ID token
+        const token = await user.getIdToken();
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+    } catch (error) {
+      console.error("Error getting auth token:", error);
+    }
+
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+// Response interceptor for error handling
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    // Handle token expiration
+    if (error.response?.status === 401) {
+      const errorCode = error.response.data?.error?.code;
+
+      if (errorCode === "TOKEN_EXPIRED" || errorCode === "INVALID_TOKEN") {
+        // Token expired - redirect to login
+        window.location.href = "/login";
+      }
+    }
+
     console.error("API Error:", error.response?.data || error.message);
     return Promise.reject(error);
   }
