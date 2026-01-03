@@ -29,18 +29,43 @@ export default function HistoryPage() {
   const formatDate = (timestamp) => {
     if (!timestamp) return "Unknown";
 
-    // Handle Firestore Timestamp
-    const date = timestamp.seconds
-      ? new Date(timestamp.seconds * 1000)
-      : new Date(timestamp);
+    try {
+      let date;
 
-    return new Intl.DateTimeFormat("en-GB", {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    }).format(date);
+      // Handle Firestore Timestamp object
+      if (timestamp._seconds !== undefined) {
+        date = new Date(timestamp._seconds * 1000);
+      }
+      // Handle Firestore Timestamp with seconds property
+      else if (timestamp.seconds !== undefined) {
+        date = new Date(timestamp.seconds * 1000);
+      }
+      // Handle ISO string
+      else if (typeof timestamp === "string") {
+        date = new Date(timestamp);
+      }
+      // Handle regular Date object or milliseconds
+      else {
+        date = new Date(timestamp);
+      }
+
+      // Check if date is valid
+      if (isNaN(date.getTime())) {
+        console.warn("Invalid date:", timestamp);
+        return "Unknown";
+      }
+
+      return new Intl.DateTimeFormat("en-GB", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      }).format(date);
+    } catch (error) {
+      console.error("Error formatting date:", error, timestamp);
+      return "Unknown";
+    }
   };
 
   if (loading) {
@@ -85,10 +110,11 @@ export default function HistoryPage() {
                 <CardContent className="p-6">
                   <div className="flex gap-4">
                     {/* Image Thumbnail */}
-                    {item.imageUrl && (
+                    {(item.imageUrl ||
+                      (item.imageUrls && item.imageUrls[0])) && (
                       <div className="flex-shrink-0">
                         <img
-                          src={item.imageUrl}
+                          src={item.imageUrl || item.imageUrls[0]}
                           alt={item.productName}
                           className="w-24 h-24 object-cover rounded-lg"
                         />
@@ -130,8 +156,11 @@ export default function HistoryPage() {
                           variant="outline"
                           size="sm"
                           onClick={() => {
-                            // Navigate to view this generation
-                            window.location.href = `/generation/${item.id}`;
+                            // For now, just show a toast
+                            // In the future, we can add a modal to view full details
+                            toast.info(
+                              "Full view coming soon! For now, check your exports."
+                            );
                           }}
                         >
                           View Details

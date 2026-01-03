@@ -18,16 +18,13 @@ function App() {
   }, [theme]);
 
   useEffect(() => {
-    // Set a demo user ID for Phase 3
-    // In Phase 4, we'll replace this with Firebase Auth
-    if (!localStorage.getItem("userId")) {
-      const userId = `demo-${Date.now()}`;
-      localStorage.setItem("userId", userId);
-    }
+    // Use FIXED demo user for testing (until Phase 4)
+    const DEMO_USER_ID = "demo-test-user";
+    localStorage.setItem("userId", DEMO_USER_ID);
 
     // Set demo user in store
     setUser({
-      uid: localStorage.getItem("userId"),
+      uid: DEMO_USER_ID,
       displayName: "Demo User",
       tier: "free",
     });

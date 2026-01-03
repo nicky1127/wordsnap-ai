@@ -23,8 +23,11 @@ class FirestoreService {
         productName,
         productInfo,
         imageUrl,
+        imageUrls,
         descriptions,
         tone,
+        condition = "new", // NEW
+        quantity = "multiple", // NEW
       } = data;
 
       const generation = {
@@ -32,11 +35,16 @@ class FirestoreService {
         productName,
         productInfo,
         imageUrl,
+        imageUrls,
         descriptions,
         tone,
+        condition, // NEW
+        quantity, // NEW
         createdAt: Firestore.Timestamp.now(),
         updatedAt: Firestore.Timestamp.now(),
       };
+
+      // ... rest stays the same
 
       const docRef = await this.db.collection("generations").add(generation);
 

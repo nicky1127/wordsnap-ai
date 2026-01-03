@@ -46,6 +46,8 @@ export default function GeneratorPage() {
       data.append("category", formData.category || "");
       data.append("specs", formData.specs || "");
       data.append("tone", formData.tone);
+      data.append("condition", formData.condition); // NEW
+      data.append("quantity", formData.quantity || "multiple"); // NEW
 
       const response = await apiService.generateDescription(data);
 

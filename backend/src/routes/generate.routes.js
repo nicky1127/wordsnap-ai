@@ -41,8 +41,8 @@ router.post(
           error: { message: "No image files provided" },
         });
       }
-
-      const { productName, category, specs, tone } = req.body;
+      const { productName, category, specs, tone, condition, quantity } =
+        req.body;
 
       if (!productName) {
         return res.status(400).json({
@@ -83,6 +83,8 @@ router.post(
           category: category || "General",
           specs: specs || "",
           tone: tone || "professional",
+          condition: condition || "new", // NEW
+          quantity: quantity || "multiple", // NEW
         }
       );
 
@@ -98,8 +100,9 @@ router.post(
         imageUrl: uploadResults[0].url,
         descriptions: aiResult.data,
         tone: tone || "professional",
+        condition: condition || "new", // NEW
+        quantity: quantity || "multiple", // NEW
       });
-
       // Track usage
       await firestoreService.trackUsage(req.user.uid);
 
