@@ -11,14 +11,14 @@ import {
 
 // Firebase configuration from environment variables
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  apiKey: "AIzaSyBblrCt6-dACNOJsjJdt-rmouBmoujhTvk",
+  authDomain: "wordsnap-ai.firebaseapp.com",
+  projectId: "wordsnap-ai",
+  storageBucket: "wordsnap-ai.firebasestorage.app",
+  messagingSenderId: "763810149974",
+  appId: "1:763810149974:web:ebc9f11c6cd5c409d26df7",
 };
-
+console.log("firebaseConfig", firebaseConfig);
 // Validate config
 if (!firebaseConfig.apiKey) {
   console.error("Firebase config missing! Check your .env file.");
