@@ -1,5 +1,15 @@
 import React, { useState } from "react";
-import { Moon, Sun, Zap, History, Home, LogOut, User } from "lucide-react";
+import {
+  Moon,
+  Sun,
+  Zap,
+  History,
+  Home,
+  LogOut,
+  User,
+  Menu,
+  X,
+} from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { useNavigate, useLocation } from "react-router-dom";
 import useAppStore from "@/store/useAppStore";
@@ -11,6 +21,7 @@ export default function Header() {
   const navigate = useNavigate();
   const location = useLocation();
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
 
   const handleSignOut = async () => {
     const { error } = await signOut();
@@ -21,34 +32,72 @@ export default function Header() {
       toast.success("Signed out successfully");
       navigate("/login");
     }
+    setShowUserMenu(false);
+    setShowMobileMenu(false);
   };
 
-  console.log("user", user);
+  // Helper component for user avatar
+  const UserAvatar = ({ size = "md", showFallback = true }) => {
+    const sizeClasses = {
+      sm: "w-9 h-9 text-sm",
+      md: "w-8 h-8 text-sm",
+      lg: "w-12 h-12 text-lg",
+    };
+
+    if (user?.photoURL) {
+      return (
+        <img
+          src={user.photoURL}
+          alt={user.displayName || "User"}
+          className={`${sizeClasses[size]} rounded-full ring-2 ring-primary/20`}
+          referrerPolicy="no-referrer"
+          onError={(e) => {
+            // Fallback to initials if image fails to load
+            if (showFallback) {
+              e.target.style.display = "none";
+              e.target.nextElementSibling.style.display = "flex";
+            }
+          }}
+        />
+      );
+    }
+
+    return (
+      <div
+        className={`${sizeClasses[size]} rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center text-white font-semibold flex-shrink-0`}
+      >
+        {(user?.displayName || user?.email || "U")[0].toUpperCase()}
+      </div>
+    );
+  };
 
   return (
-    <header className="border-b border-border bg-card">
-      <div className="container mx-auto px-4 py-4">
-        <div className="flex items-center justify-between">
-          {/* Logo */}
+    <header className="border-b border-border bg-card sticky top-0 z-50 shadow-sm">
+      <div className="container mx-auto px-4">
+        <div className="flex items-center justify-between h-16">
+          {/* Logo - Compact on mobile */}
           <div
-            className="flex items-center gap-2 cursor-pointer"
+            className="flex items-center gap-2 cursor-pointer flex-shrink-0"
             onClick={() => navigate("/")}
           >
             <div className="bg-gradient-to-br from-primary to-accent rounded-lg p-2">
               <Zap className="w-5 h-5 text-white" />
             </div>
-            <div>
-              <h1 className="text-xl font-bold">WordSnap AI</h1>
-              <p className="text-xs text-muted-foreground">
-                Snap a pic. Get pro copy.
+            <div className="hidden sm:block">
+              <h1 className="text-lg font-bold leading-tight">WordSnap AI</h1>
+              <p className="text-xs text-muted-foreground leading-tight">
+                Snap. Generate. Sell.
               </p>
             </div>
+            {/* Mobile: Just show app name */}
+            <h1 className="sm:hidden text-lg font-bold">WordSnap</h1>
           </div>
 
-          {/* Navigation */}
-          <div className="flex items-center gap-2">
+          {/* Desktop Navigation - Hidden on mobile */}
+          <nav className="hidden md:flex items-center gap-2">
             <Button
               variant={location.pathname === "/" ? "default" : "ghost"}
+              size="sm"
               onClick={() => navigate("/")}
             >
               <Home className="w-4 h-4 mr-2" />
@@ -56,17 +105,23 @@ export default function Header() {
             </Button>
             <Button
               variant={location.pathname === "/history" ? "default" : "ghost"}
+              size="sm"
               onClick={() => navigate("/history")}
             >
               <History className="w-4 h-4 mr-2" />
               History
             </Button>
-          </div>
+          </nav>
 
-          {/* Actions */}
-          <div className="flex items-center gap-4">
-            {/* Theme Toggle */}
-            <Button variant="outline" size="icon" onClick={toggleTheme}>
+          {/* Right Side Actions */}
+          <div className="flex items-center gap-2">
+            {/* Theme Toggle - Always visible */}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleTheme}
+              className="flex-shrink-0"
+            >
               {theme === "dark" ? (
                 <Sun className="w-4 h-4" />
               ) : (
@@ -74,51 +129,57 @@ export default function Header() {
               )}
             </Button>
 
-            {/* User Menu */}
-            <div className="relative">
+            {/* Mobile Menu Button - Only on small screens */}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setShowMobileMenu(!showMobileMenu)}
+              className="md:hidden flex-shrink-0"
+            >
+              {showMobileMenu ? (
+                <X className="w-5 h-5" />
+              ) : (
+                <Menu className="w-5 h-5" />
+              )}
+            </Button>
+
+            {/* User Profile - Desktop */}
+            <div className="hidden md:block relative">
               <button
                 onClick={() => setShowUserMenu(!showUserMenu)}
                 className="flex items-center gap-2 px-3 py-2 rounded-lg bg-secondary hover:bg-secondary/80 transition-colors"
               >
-                {user?.photoURL ? (
-                  <img
-                    src={user.photoURL}
-                    alt={user.displayName || "User"}
-                    className="w-8 h-8 rounded-full ring-2 ring-primary/20 hover:ring-primary/40 transition-all"
-                    referrerPolicy="no-referrer"
-                    crossOrigin="anonymous"
-                    onError={(e) => {
-                      // Fallback if image fails to load
-                      console.warn("Failed to load profile image:", e);
-                      e.target.style.display = "none";
-                    }}
-                  />
-                ) : (
-                  <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
-                    <User className="w-4 h-4" />
-                  </div>
-                )}
-                <span className="text-sm font-medium hidden sm:block">
-                  {user?.displayName || user?.email}
+                <UserAvatar size="md" />
+                <span className="text-sm font-medium truncate max-w-[120px]">
+                  {user?.displayName || user?.email?.split("@")[0] || "User"}
                 </span>
               </button>
 
-              {/* Dropdown Menu */}
+              {/* Desktop User Dropdown */}
               {showUserMenu && (
                 <>
                   <div
                     className="fixed inset-0 z-10"
                     onClick={() => setShowUserMenu(false)}
                   />
-                  <div className="absolute right-0 mt-2 w-56 bg-card border border-border rounded-lg shadow-lg z-20">
-                    <div className="p-3 border-b border-border">
-                      <p className="text-sm font-medium">
-                        {user?.displayName || "User"}
-                      </p>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {user?.email}
-                      </p>
-                      <p className="text-xs text-primary mt-1">Free Plan</p>
+                  <div className="absolute right-0 mt-2 w-64 bg-card border border-border rounded-lg shadow-lg z-20">
+                    <div className="p-4 border-b border-border">
+                      <div className="flex items-center gap-3">
+                        <UserAvatar size="lg" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">
+                            {user?.displayName || "User"}
+                          </p>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {user?.email}
+                          </p>
+                          <div className="flex items-center gap-1 mt-1">
+                            <span className="text-xs px-2 py-0.5 bg-primary/10 text-primary rounded-full">
+                              Free Plan
+                            </span>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                     <div className="p-2">
                       <button
@@ -133,8 +194,71 @@ export default function Header() {
                 </>
               )}
             </div>
+
+            {/* User Avatar - Mobile (just the circle) */}
+            <div className="md:hidden">
+              <UserAvatar size="sm" />
+            </div>
           </div>
         </div>
+
+        {/* Mobile Menu Dropdown */}
+        {showMobileMenu && (
+          <div className="md:hidden border-t border-border py-4 space-y-2">
+            {/* Navigation Links */}
+            <Button
+              variant={location.pathname === "/" ? "default" : "ghost"}
+              className="w-full justify-start"
+              onClick={() => {
+                navigate("/");
+                setShowMobileMenu(false);
+              }}
+            >
+              <Home className="w-4 h-4 mr-2" />
+              Generate Descriptions
+            </Button>
+            <Button
+              variant={location.pathname === "/history" ? "default" : "ghost"}
+              className="w-full justify-start"
+              onClick={() => {
+                navigate("/history");
+                setShowMobileMenu(false);
+              }}
+            >
+              <History className="w-4 h-4 mr-2" />
+              History
+            </Button>
+
+            {/* User Info */}
+            <div className="pt-2 pb-2 px-3 border-t border-border mt-2">
+              <div className="flex items-center gap-3 mb-3">
+                <UserAvatar size="lg" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">
+                    {user?.displayName || "User"}
+                  </p>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {user?.email}
+                  </p>
+                </div>
+              </div>
+              <div className="mb-3">
+                <span className="text-xs px-2 py-1 bg-primary/10 text-primary rounded-full">
+                  Free Plan • 10/10 generations left
+                </span>
+              </div>
+              <Button
+                variant="destructive"
+                size="sm"
+                className="w-full"
+                onClick={handleSignOut}
+              >
+                <LogOut className="w-4 h-4 mr-2" />
+                Sign Out
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
     </header>
   );
