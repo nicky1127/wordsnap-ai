@@ -66,13 +66,20 @@ router.post(
         const base64 = storageService.bufferToBase64(file.buffer);
         imageBase64Array.push(base64);
 
-        const publicUrl = await storageService.uploadImage(
+        const uploadResult = await storageService.uploadImage(
           file.buffer,
           req.user.uid,
           file.originalname
         );
-        publicUrls.push(publicUrl);
+
+        // Extract just the URL string (FIX: was pushing whole object before)
+        publicUrls.push(uploadResult.url);
       }
+
+      Logger.debug("Images uploaded", {
+        count: publicUrls.length,
+        urls: publicUrls,
+      });
 
       // Generate descriptions using Vertex AI
       const result = await vertexAIService.generateProductDescription(
@@ -98,11 +105,12 @@ router.post(
         userId: req.user.uid,
         productName,
         category,
+        specs,
         tone: tone || "professional",
         condition: condition || "new",
         quantity: quantity || "multiple",
         descriptions,
-        imageUrls: publicUrls,
+        imageUrls: publicUrls, // Now this is an array of strings, not objects!
       });
 
       // CRITICAL: Increment user's generation counters

@@ -110,13 +110,20 @@ export default function HistoryPage() {
                 <CardContent className="p-6">
                   <div className="flex gap-4">
                     {/* Image Thumbnail */}
-                    {(item.imageUrl ||
-                      (item.imageUrls && item.imageUrls[0])) && (
+                    {item.imageUrls && item.imageUrls.length > 0 && (
                       <div className="flex-shrink-0">
                         <img
-                          src={item.imageUrl || item.imageUrls[0]}
+                          src={item.imageUrls[0]}
                           alt={item.productName}
                           className="w-24 h-24 object-cover rounded-lg"
+                          referrerPolicy="no-referrer"
+                          onError={(e) => {
+                            console.error(
+                              "Image failed to load:",
+                              item.imageUrls[0]
+                            );
+                            e.target.style.display = "none";
+                          }}
                         />
                       </div>
                     )}
@@ -128,15 +135,20 @@ export default function HistoryPage() {
                           <h3 className="text-lg font-semibold truncate">
                             {item.productName}
                           </h3>
-                          {item.productInfo?.category && (
+                          {item.category && (
                             <p className="text-sm text-muted-foreground">
-                              {item.productInfo.category}
+                              {item.category}
                             </p>
                           )}
                         </div>
-                        <Badge variant="secondary">
-                          {item.tone || "professional"}
-                        </Badge>
+                        <div className="flex gap-2">
+                          <Badge variant="secondary">
+                            {item.tone || "professional"}
+                          </Badge>
+                          {item.condition && item.condition !== "new" && (
+                            <Badge variant="outline">{item.condition}</Badge>
+                          )}
+                        </div>
                       </div>
 
                       {/* Short Description Preview */}
@@ -151,13 +163,17 @@ export default function HistoryPage() {
                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
                           <Clock className="w-3 h-3" />
                           {formatDate(item.createdAt)}
+                          {item.imageUrls && item.imageUrls.length > 1 && (
+                            <>
+                              <span>•</span>
+                              <span>{item.imageUrls.length} images</span>
+                            </>
+                          )}
                         </div>
                         <Button
                           variant="outline"
                           size="sm"
                           onClick={() => {
-                            // For now, just show a toast
-                            // In the future, we can add a modal to view full details
                             toast.info(
                               "Full view coming soon! For now, check your exports."
                             );

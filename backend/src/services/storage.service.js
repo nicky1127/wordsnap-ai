@@ -24,35 +24,40 @@ class StorageService {
    * @param {string} mimeType - File MIME type
    * @returns {Promise<object>} Upload result with URL
    */
-  async uploadImage(fileBuffer, originalName, mimeType) {
+  async uploadImage(fileBuffer, userId, originalName) {
     try {
       // Generate unique filename
       const timestamp = Date.now();
       const randomString = crypto.randomBytes(8).toString("hex");
       const extension = path.extname(originalName);
-      const filename = `products/${timestamp}-${randomString}${extension}`;
+      const filename = `products/${userId}/${timestamp}-${randomString}${extension}`;
 
       // Create file reference
       const file = this.bucket.file(filename);
 
-      // Upload file (bucket is already public via IAM)
+      // Detect MIME type
+      const mimeType = this.getMimeType(extension);
+
+      // Upload file
       await file.save(fileBuffer, {
         metadata: {
           contentType: mimeType,
           metadata: {
             originalName: originalName,
             uploadedAt: new Date().toISOString(),
+            userId: userId,
           },
         },
       });
 
-      // Get public URL (works because bucket has public read access)
-      const publicUrl = `https://storage.googleapis.com/${config.storage.bucketName}/${filename}`;
+      // Get public URL
+      const publicUrl = `https://storage.googleapis.com/${this.bucket.name}/${filename}`;
 
       Logger.info("Image uploaded successfully", {
         filename,
         size: fileBuffer.length,
         mimeType,
+        userId,
       });
 
       return {
@@ -64,11 +69,22 @@ class StorageService {
     } catch (error) {
       Logger.error("Image upload failed", error, {
         originalName,
-        mimeType,
+        userId,
       });
 
       throw new Error(`Storage upload failed: ${error.message}`);
     }
+  }
+
+  getMimeType(extension) {
+    const mimeTypes = {
+      ".jpg": "image/jpeg",
+      ".jpeg": "image/jpeg",
+      ".png": "image/png",
+      ".gif": "image/gif",
+      ".webp": "image/webp",
+    };
+    return mimeTypes[extension.toLowerCase()] || "application/octet-stream";
   }
 
   /**

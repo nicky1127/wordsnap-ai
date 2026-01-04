@@ -1,4 +1,4 @@
-const { Firestore } = require("@google-cloud/firestore");
+const Firestore = require("@google-cloud/firestore");
 const config = require("../config");
 const Logger = require("../utils/logger");
 
@@ -20,6 +20,7 @@ class FirestoreService {
       const userDoc = await userRef.get();
 
       if (!userDoc.exists) {
+        // New user - create full document
         await userRef.set({
           email,
           displayName: displayName || "",
@@ -28,16 +29,32 @@ class FirestoreService {
           status: "active",
           authProvider,
           totalGenerations: 0,
-          monthlyUsed: 0, // NEW - track monthly usage
-          monthlyResetAt: Firestore.FieldValue.serverTimestamp(), // NEW - when was it last reset
+          monthlyUsed: 0,
+          monthlyResetAt: Firestore.FieldValue.serverTimestamp(),
           createdAt: Firestore.FieldValue.serverTimestamp(),
           lastLoginAt: Firestore.FieldValue.serverTimestamp(),
         });
 
         Logger.info("User initialized", { userId, email });
       } else {
-        // Update last login
-        await this.updateUserLogin(userId, authProvider);
+        // Existing user - update login and ensure fields exist
+        const userData = userDoc.data();
+        const updates = {
+          lastLoginAt: Firestore.FieldValue.serverTimestamp(),
+        };
+
+        // Add missing fields if they don't exist
+        if (userData.monthlyUsed === undefined) {
+          updates.monthlyUsed = 0;
+        }
+        if (userData.monthlyResetAt === undefined) {
+          updates.monthlyResetAt = Firestore.FieldValue.serverTimestamp();
+        }
+        if (userData.totalGenerations === undefined) {
+          updates.totalGenerations = 0;
+        }
+
+        await userRef.update(updates);
 
         // Check if we need to reset monthly usage (new month)
         await this.checkAndResetMonthlyUsage(userId);
@@ -61,7 +78,6 @@ class FirestoreService {
       const monthlyResetAt = userData.monthlyResetAt?.toDate();
 
       if (!monthlyResetAt) {
-        // No reset date, set it to now
         await userRef.update({
           monthlyResetAt: Firestore.FieldValue.serverTimestamp(),
           monthlyUsed: 0,
@@ -91,20 +107,71 @@ class FirestoreService {
   }
 
   /**
+   * Update user login data
+   */
+  async updateUserLogin(userId, authProvider = "unknown") {
+    try {
+      const userRef = this.db.collection("users").doc(userId);
+
+      await userRef.set(
+        {
+          lastLoginAt: Firestore.FieldValue.serverTimestamp(),
+          authProvider,
+          updatedAt: Firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      );
+
+      Logger.debug("User login updated", { userId });
+    } catch (error) {
+      Logger.error("Failed to update user login", error);
+    }
+  }
+
+  /**
    * Increment user's generation counters
    */
   async incrementUserGenerations(userId) {
     try {
+      Logger.info("Attempting to increment user generations", { userId });
+
       const userRef = this.db.collection("users").doc(userId);
+
+      // Check if user exists first
+      const userDoc = await userRef.get();
+      if (!userDoc.exists) {
+        Logger.error("User document not found when incrementing", { userId });
+        throw new Error("User document not found");
+      }
+
+      const before = userDoc.data();
+      Logger.debug("User data before increment", {
+        userId,
+        monthlyUsed: before.monthlyUsed,
+        totalGenerations: before.totalGenerations,
+      });
 
       await userRef.update({
         totalGenerations: Firestore.FieldValue.increment(1),
-        monthlyUsed: Firestore.FieldValue.increment(1), // NEW - increment monthly counter
+        monthlyUsed: Firestore.FieldValue.increment(1),
       });
 
-      Logger.debug("User generation count incremented", { userId });
+      // Verify the increment worked
+      const afterDoc = await userRef.get();
+      const after = afterDoc.data();
+      Logger.info("User generation count incremented successfully", {
+        userId,
+        before: {
+          monthlyUsed: before.monthlyUsed || 0,
+          totalGenerations: before.totalGenerations || 0,
+        },
+        after: {
+          monthlyUsed: after.monthlyUsed || 0,
+          totalGenerations: after.totalGenerations || 0,
+        },
+      });
     } catch (error) {
-      Logger.error("Failed to increment generations", error);
+      Logger.error("Failed to increment generations", error, { userId });
       throw error;
     }
   }
@@ -133,7 +200,7 @@ class FirestoreService {
         free: 10,
         starter: 200,
         growth: 1000,
-        agency: -1, // unlimited
+        agency: -1,
       };
 
       return {
@@ -149,51 +216,71 @@ class FirestoreService {
   }
 
   /**
-   * Save generated description to Firestore
-   * @param {object} data - Generation data
-   * @returns {Promise<object>} Saved document
+   * Save generation to Firestore
    */
   async saveGeneration(data) {
     try {
       const {
-        userId = "anonymous",
-        productName,
-        productInfo,
-        imageUrl,
-        imageUrls,
-        descriptions,
-        tone,
-        condition = "new", // NEW
-        quantity = "multiple", // NEW
-      } = data;
-
-      const generation = {
         userId,
         productName,
-        productInfo,
-        imageUrl,
-        imageUrls,
-        descriptions,
+        category,
+        specs,
         tone,
-        condition, // NEW
-        quantity, // NEW
-        createdAt: Firestore.Timestamp.now(),
-        updatedAt: Firestore.Timestamp.now(),
+        condition,
+        quantity,
+        descriptions,
+        imageUrls,
+      } = data;
+
+      // Validate required fields
+      if (!userId) {
+        throw new Error("userId is required");
+      }
+      if (!productName) {
+        throw new Error("productName is required");
+      }
+
+      // Build clean document (no undefined values)
+      const generationData = {
+        userId,
+        productName,
+        category: category || "",
+        specs: specs || "",
+        tone: tone || "professional",
+        condition: condition || "new",
+        quantity: quantity || "multiple",
+        descriptions: {
+          short: descriptions?.short || "",
+          medium: descriptions?.medium || "",
+          long: descriptions?.long || "",
+          bullets: Array.isArray(descriptions?.bullets)
+            ? descriptions.bullets
+            : [],
+          keywords: Array.isArray(descriptions?.keywords)
+            ? descriptions.keywords
+            : [],
+        },
+        imageUrls: Array.isArray(imageUrls) ? imageUrls : [],
+        createdAt: Firestore.FieldValue.serverTimestamp(),
       };
 
-      // ... rest stays the same
-
-      const docRef = await this.db.collection("generations").add(generation);
-
-      Logger.info("Generation saved to Firestore", {
-        docId: docRef.id,
+      Logger.debug("Saving generation to Firestore", {
         userId,
         productName,
       });
 
+      const docRef = await this.db
+        .collection("generations")
+        .add(generationData);
+
+      Logger.info("Generation saved to Firestore", {
+        generationId: docRef.id,
+        userId,
+      });
+
       return {
         id: docRef.id,
-        ...generation,
+        ...generationData,
       };
     } catch (error) {
       Logger.error("Failed to save generation", error);
@@ -203,9 +290,6 @@ class FirestoreService {
 
   /**
    * Get user's generation history
-   * @param {string} userId - User ID
-   * @param {number} limit - Number of results
-   * @returns {Promise<array>} User generations
    */
   async getUserGenerations(userId, limit = 20) {
     try {
@@ -238,8 +322,6 @@ class FirestoreService {
 
   /**
    * Get generation by ID
-   * @param {string} generationId - Generation document ID
-   * @returns {Promise<object>} Generation data
    */
   async getGeneration(generationId) {
     try {
@@ -263,150 +345,22 @@ class FirestoreService {
   }
 
   /**
-   * Track user usage for rate limiting
-   * @param {string} userId - User ID
-   * @returns {Promise<object>} Usage stats
-   */
-  async trackUsage(userId) {
-    try {
-      const userRef = this.db.collection("users").doc(userId);
-      const doc = await userRef.get();
-
-      const now = new Date();
-      const currentMonth = `${now.getFullYear()}-${String(
-        now.getMonth() + 1
-      ).padStart(2, "0")}`;
-
-      if (!doc.exists) {
-        // Create new user document
-        const userData = {
-          userId,
-          usage: {
-            [currentMonth]: 1,
-          },
-          totalGenerations: 1,
-          createdAt: Firestore.Timestamp.now(),
-          updatedAt: Firestore.Timestamp.now(),
-        };
-
-        await userRef.set(userData);
-        return userData;
-      }
-
-      // Update existing user
-      const userData = doc.data();
-      const currentUsage = userData.usage?.[currentMonth] || 0;
-
-      await userRef.update({
-        [`usage.${currentMonth}`]: currentUsage + 1,
-        totalGenerations: Firestore.FieldValue.increment(1),
-        updatedAt: Firestore.Timestamp.now(),
-      });
-
-      return {
-        userId,
-        monthlyUsage: currentUsage + 1,
-        totalGenerations: (userData.totalGenerations || 0) + 1,
-      };
-    } catch (error) {
-      Logger.error("Failed to track usage", error, { userId });
-      throw new Error(`Usage tracking failed: ${error.message}`);
-    }
-  }
-
-  /**
-   * Get user's current month usage
-   * @param {string} userId - User ID
-   * @returns {Promise<number>} Usage count
+   * Get user's current month usage (LEGACY - kept for backwards compatibility)
    */
   async getUserMonthlyUsage(userId) {
-    try {
-      const doc = await this.db.collection("users").doc(userId).get();
-
-      if (!doc.exists) {
-        return 0;
-      }
-
-      const now = new Date();
-      const currentMonth = `${now.getFullYear()}-${String(
-        now.getMonth() + 1
-      ).padStart(2, "0")}`;
-      const userData = doc.data();
-
-      return userData.usage?.[currentMonth] || 0;
-    } catch (error) {
-      Logger.error("Failed to get user usage", error, { userId });
-      return 0;
-    }
-  }
-
-  /**
-   * Update user login data
-   */
-  async updateUserLogin(userId, authProvider = "unknown") {
-    try {
-      const userRef = this.db.collection("users").doc(userId);
-
-      await userRef.set(
-        {
-          lastLoginAt: Firestore.FieldValue.serverTimestamp(),
-          authProvider,
-          updatedAt: Firestore.FieldValue.serverTimestamp(),
-        },
-        { merge: true }
-      );
-
-      Logger.debug("User login updated", { userId });
-    } catch (error) {
-      Logger.error("Failed to update user login", error);
-    }
-  }
-
-  /**
-   * Initialize user document on first login
-   */
-  async initializeUser(userId, email, displayName, authProvider) {
     try {
       const userRef = this.db.collection("users").doc(userId);
       const userDoc = await userRef.get();
 
       if (!userDoc.exists) {
-        await userRef.set({
-          email,
-          displayName: displayName || "",
-          role: "user",
-          tier: "free",
-          status: "active",
-          authProvider,
-          totalGenerations: 0,
-          createdAt: Firestore.FieldValue.serverTimestamp(),
-          lastLoginAt: Firestore.FieldValue.serverTimestamp(),
-        });
-
-        Logger.info("User initialized", { userId, email });
-      } else {
-        // Update last login
-        await this.updateUserLogin(userId, authProvider);
+        return 0;
       }
+
+      const userData = userDoc.data();
+      return userData.monthlyUsed || 0;
     } catch (error) {
-      Logger.error("Failed to initialize user", error);
-    }
-  }
-
-  /**
-   * Increment total generations count
-   */
-  async incrementUserGenerations(userId) {
-    try {
-      const userRef = this.db.collection("users").doc(userId);
-
-      await userRef.update({
-        totalGenerations: Firestore.FieldValue.increment(1),
-      });
-
-      Logger.debug("User generation count incremented", { userId });
-    } catch (error) {
-      Logger.error("Failed to increment generations", error);
+      Logger.error("Failed to get user monthly usage", error, { userId });
+      return 0;
     }
   }
 }
