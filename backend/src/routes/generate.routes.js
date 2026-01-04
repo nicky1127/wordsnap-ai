@@ -106,6 +106,9 @@ router.post(
       // Track usage
       await firestoreService.trackUsage(req.user.uid);
 
+      // Increment user's total generation count
+      await firestoreService.incrementUserGenerations(req.user.uid);
+
       // Return response
       res.json({
         success: true,

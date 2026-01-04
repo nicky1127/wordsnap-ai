@@ -1,12 +1,12 @@
 const { auth } = require("../config/firebase");
 const Logger = require("../utils/logger");
+const firestoreService = require("../services/firestore.service");
 
 /**
  * Verify Firebase Auth token and attach user to request
  */
 const authenticate = async (req, res, next) => {
   try {
-    // Get token from Authorization header
     const authHeader = req.headers.authorization;
 
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -20,12 +20,23 @@ const authenticate = async (req, res, next) => {
     }
 
     const token = authHeader.split("Bearer ")[1];
-
-    // Verify the token with Firebase
     const decodedToken = await auth.verifyIdToken(token);
-
-    // Get user details
     const userRecord = await auth.getUser(decodedToken.uid);
+
+    // Determine auth provider
+    let authProvider = "unknown";
+    if (userRecord.providerData && userRecord.providerData.length > 0) {
+      const providerId = userRecord.providerData[0].providerId;
+      authProvider = providerId === "google.com" ? "google" : "email";
+    }
+
+    // Initialize or update user in Firestore
+    await firestoreService.initializeUser(
+      decodedToken.uid,
+      decodedToken.email,
+      userRecord.displayName,
+      authProvider
+    );
 
     // Attach user to request
     req.user = {
@@ -34,7 +45,7 @@ const authenticate = async (req, res, next) => {
       displayName: userRecord.displayName || decodedToken.email,
       photoURL: userRecord.photoURL,
       emailVerified: decodedToken.email_verified,
-      tier: "free", // Default tier (will be updated from Firestore in Phase 5)
+      tier: "free", // Will be fetched from Firestore in future
     };
 
     Logger.debug("User authenticated", {
@@ -48,7 +59,6 @@ const authenticate = async (req, res, next) => {
       errorCode: error.code,
     });
 
-    // Handle specific error types
     if (error.code === "auth/id-token-expired") {
       return res.status(401).json({
         success: false,

@@ -13,6 +13,7 @@ const { apiLimiter } = require("./middleware/rateLimit.middleware");
 // Import routes
 const healthRoutes = require("./routes/health.routes");
 const generateRoutes = require("./routes/generate.routes");
+const adminRoutes = require("./routes/admin.routes");
 
 // Initialize Firebase Admin (IMPORTANT - do this early)
 require("./config/firebase");
@@ -63,6 +64,7 @@ app.use(apiLimiter);
 // Routes
 app.use("/health", healthRoutes);
 app.use("/api/generate", generateRoutes);
+app.use("/api/admin", adminRoutes);
 
 // Root endpoint
 app.get("/", (req, res) => {

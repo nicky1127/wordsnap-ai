@@ -17,40 +17,34 @@ import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import LoginPage from "@/pages/LoginPage";
 import GeneratorPage from "@/pages/GeneratorPage";
 import HistoryPage from "@/pages/HistoryPage";
+import AdminDashboard from "@/pages/AdminDashboard"; // NEW
 
 function App() {
   const { theme, setUser, clearUser, setAuthLoading } = useAppStore();
 
   useEffect(() => {
-    // Apply theme to document
     const root = window.document.documentElement;
     root.classList.remove("light", "dark");
     root.classList.add(theme);
   }, [theme]);
 
   useEffect(() => {
-    // Listen for auth state changes
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       if (firebaseUser) {
-        // User is signed in
         setUser({
           uid: firebaseUser.uid,
           email: firebaseUser.email,
           displayName: firebaseUser.displayName,
           photoURL: firebaseUser.photoURL,
           emailVerified: firebaseUser.emailVerified,
-          tier: "free", // Default tier
+          tier: "free",
         });
       } else {
-        // User is signed out
         clearUser();
       }
-
-      // Auth state loaded
       setAuthLoading(false);
     });
 
-    // Cleanup subscription on unmount
     return () => unsubscribe();
   }, [setUser, clearUser, setAuthLoading]);
 
@@ -81,11 +75,20 @@ function App() {
             }
           />
 
-          {/* Catch all - redirect to home */}
+          {/* Admin Route - NEW */}
+          <Route
+            path="/admin"
+            element={
+              <ProtectedRoute>
+                <AdminDashboard />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Catch all */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
 
-        {/* Toast Notifications */}
         <Toaster
           position="top-right"
           theme={theme}

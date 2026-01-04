@@ -202,6 +202,76 @@ class FirestoreService {
       return 0;
     }
   }
+
+  /**
+   * Update user login data
+   */
+  async updateUserLogin(userId, authProvider = "unknown") {
+    try {
+      const userRef = this.db.collection("users").doc(userId);
+
+      await userRef.set(
+        {
+          lastLoginAt: Firestore.FieldValue.serverTimestamp(),
+          authProvider,
+          updatedAt: Firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      );
+
+      Logger.debug("User login updated", { userId });
+    } catch (error) {
+      Logger.error("Failed to update user login", error);
+    }
+  }
+
+  /**
+   * Initialize user document on first login
+   */
+  async initializeUser(userId, email, displayName, authProvider) {
+    try {
+      const userRef = this.db.collection("users").doc(userId);
+      const userDoc = await userRef.get();
+
+      if (!userDoc.exists) {
+        await userRef.set({
+          email,
+          displayName: displayName || "",
+          role: "user",
+          tier: "free",
+          status: "active",
+          authProvider,
+          totalGenerations: 0,
+          createdAt: Firestore.FieldValue.serverTimestamp(),
+          lastLoginAt: Firestore.FieldValue.serverTimestamp(),
+        });
+
+        Logger.info("User initialized", { userId, email });
+      } else {
+        // Update last login
+        await this.updateUserLogin(userId, authProvider);
+      }
+    } catch (error) {
+      Logger.error("Failed to initialize user", error);
+    }
+  }
+
+  /**
+   * Increment total generations count
+   */
+  async incrementUserGenerations(userId) {
+    try {
+      const userRef = this.db.collection("users").doc(userId);
+
+      await userRef.update({
+        totalGenerations: Firestore.FieldValue.increment(1),
+      });
+
+      Logger.debug("User generation count incremented", { userId });
+    } catch (error) {
+      Logger.error("Failed to increment generations", error);
+    }
+  }
 }
 
 // Export singleton instance
