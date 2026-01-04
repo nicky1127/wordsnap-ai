@@ -143,7 +143,6 @@ router.post(
     }
   }
 );
-
 /**
  * Analyze product image (extract features)
  * POST /api/generate/analyze
