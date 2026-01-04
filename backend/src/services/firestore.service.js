@@ -12,6 +12,143 @@ class FirestoreService {
   }
 
   /**
+   * Initialize user document on first login
+   */
+  async initializeUser(userId, email, displayName, authProvider) {
+    try {
+      const userRef = this.db.collection("users").doc(userId);
+      const userDoc = await userRef.get();
+
+      if (!userDoc.exists) {
+        await userRef.set({
+          email,
+          displayName: displayName || "",
+          role: "user",
+          tier: "free",
+          status: "active",
+          authProvider,
+          totalGenerations: 0,
+          monthlyUsed: 0, // NEW - track monthly usage
+          monthlyResetAt: Firestore.FieldValue.serverTimestamp(), // NEW - when was it last reset
+          createdAt: Firestore.FieldValue.serverTimestamp(),
+          lastLoginAt: Firestore.FieldValue.serverTimestamp(),
+        });
+
+        Logger.info("User initialized", { userId, email });
+      } else {
+        // Update last login
+        await this.updateUserLogin(userId, authProvider);
+
+        // Check if we need to reset monthly usage (new month)
+        await this.checkAndResetMonthlyUsage(userId);
+      }
+    } catch (error) {
+      Logger.error("Failed to initialize user", error);
+    }
+  }
+
+  /**
+   * Check if monthly usage should be reset (new month)
+   */
+  async checkAndResetMonthlyUsage(userId) {
+    try {
+      const userRef = this.db.collection("users").doc(userId);
+      const userDoc = await userRef.get();
+
+      if (!userDoc.exists) return;
+
+      const userData = userDoc.data();
+      const monthlyResetAt = userData.monthlyResetAt?.toDate();
+
+      if (!monthlyResetAt) {
+        // No reset date, set it to now
+        await userRef.update({
+          monthlyResetAt: Firestore.FieldValue.serverTimestamp(),
+          monthlyUsed: 0,
+        });
+        return;
+      }
+
+      // Check if it's a new month
+      const now = new Date();
+      const resetDate = new Date(monthlyResetAt);
+
+      if (
+        now.getMonth() !== resetDate.getMonth() ||
+        now.getFullYear() !== resetDate.getFullYear()
+      ) {
+        // New month! Reset usage
+        await userRef.update({
+          monthlyUsed: 0,
+          monthlyResetAt: Firestore.FieldValue.serverTimestamp(),
+        });
+
+        Logger.info("Monthly usage auto-reset", { userId });
+      }
+    } catch (error) {
+      Logger.error("Failed to check monthly reset", error);
+    }
+  }
+
+  /**
+   * Increment user's generation counters
+   */
+  async incrementUserGenerations(userId) {
+    try {
+      const userRef = this.db.collection("users").doc(userId);
+
+      await userRef.update({
+        totalGenerations: Firestore.FieldValue.increment(1),
+        monthlyUsed: Firestore.FieldValue.increment(1), // NEW - increment monthly counter
+      });
+
+      Logger.debug("User generation count incremented", { userId });
+    } catch (error) {
+      Logger.error("Failed to increment generations", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get user's current usage stats
+   */
+  async getUserUsageStats(userId) {
+    try {
+      const userRef = this.db.collection("users").doc(userId);
+      const userDoc = await userRef.get();
+
+      if (!userDoc.exists) {
+        return {
+          monthlyUsed: 0,
+          monthlyQuota: 10,
+          totalGenerations: 0,
+          tier: "free",
+        };
+      }
+
+      const userData = userDoc.data();
+      const tier = userData.tier || "free";
+
+      const quotas = {
+        free: 10,
+        starter: 200,
+        growth: 1000,
+        agency: -1, // unlimited
+      };
+
+      return {
+        monthlyUsed: userData.monthlyUsed || 0,
+        monthlyQuota: quotas[tier],
+        totalGenerations: userData.totalGenerations || 0,
+        tier,
+      };
+    } catch (error) {
+      Logger.error("Failed to get user usage stats", error);
+      throw error;
+    }
+  }
+
+  /**
    * Save generated description to Firestore
    * @param {object} data - Generation data
    * @returns {Promise<object>} Saved document

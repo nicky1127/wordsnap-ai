@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Moon,
   Sun,
@@ -10,12 +10,14 @@ import {
   Menu,
   X,
   BarChart3,
+  Shield,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { useNavigate, useLocation } from "react-router-dom";
 import useAppStore from "@/store/useAppStore";
-import { signOut } from "@/lib/firebase";
+import { signOut, auth } from "@/lib/firebase";
 import { toast } from "sonner";
+import api from "@/lib/api";
 
 export default function Header() {
   const { theme, toggleTheme, user, clearUser } = useAppStore();
@@ -23,6 +25,28 @@ export default function Header() {
   const location = useLocation();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  console.log("isAdmin", isAdmin);
+  // Check admin status
+  useEffect(() => {
+    const checkAdminStatus = async () => {
+      if (!user) {
+        setIsAdmin(false);
+        return;
+      }
+
+      try {
+        // Try to call admin endpoint - if it succeeds, user is admin
+        const response = await api.get("/api/admin/stats");
+        setIsAdmin(true);
+      } catch (error) {
+        // If 403, user is not admin
+        setIsAdmin(false);
+      }
+    };
+
+    checkAdminStatus();
+  }, [user]);
 
   const handleSignOut = async () => {
     const { error } = await signOut();
@@ -53,10 +77,8 @@ export default function Header() {
           className={`${sizeClasses[size]} rounded-full ring-2 ring-primary/20`}
           referrerPolicy="no-referrer"
           onError={(e) => {
-            // Fallback to initials if image fails to load
             if (showFallback) {
               e.target.style.display = "none";
-              e.target.nextElementSibling.style.display = "flex";
             }
           }}
         />
@@ -90,7 +112,6 @@ export default function Header() {
                 Snap. Generate. Sell.
               </p>
             </div>
-            {/* Mobile: Just show app name */}
             <h1 className="sm:hidden text-lg font-bold">WordSnap</h1>
           </div>
 
@@ -112,11 +133,23 @@ export default function Header() {
               <History className="w-4 h-4 mr-2" />
               History
             </Button>
+
+            {/* Admin link - Only show for admins */}
+            {isAdmin && (
+              <Button
+                variant={location.pathname === "/admin" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => navigate("/admin")}
+              >
+                <BarChart3 className="w-4 h-4 mr-2" />
+                Admin
+              </Button>
+            )}
           </nav>
 
           {/* Right Side Actions */}
           <div className="flex items-center gap-2">
-            {/* Theme Toggle - Always visible */}
+            {/* Theme Toggle */}
             <Button
               variant="ghost"
               size="icon"
@@ -130,7 +163,7 @@ export default function Header() {
               )}
             </Button>
 
-            {/* Mobile Menu Button - Only on small screens */}
+            {/* Mobile Menu Button */}
             <Button
               variant="ghost"
               size="icon"
@@ -154,6 +187,9 @@ export default function Header() {
                 <span className="text-sm font-medium truncate max-w-[120px]">
                   {user?.displayName || user?.email?.split("@")[0] || "User"}
                 </span>
+                {isAdmin && (
+                  <Shield className="w-4 h-4 text-primary" title="Admin" />
+                )}
               </button>
 
               {/* Desktop User Dropdown */}
@@ -178,32 +214,33 @@ export default function Header() {
                             <span className="text-xs px-2 py-0.5 bg-primary/10 text-primary rounded-full">
                               Free Plan
                             </span>
+                            {isAdmin && (
+                              <span className="text-xs px-2 py-0.5 bg-green-500/10 text-green-600 rounded-full flex items-center gap-1">
+                                <Shield className="w-3 h-3" />
+                                Admin
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>
                     </div>
-                    <div className="p-2">
-                      {/* Admin Dashboard Link - Only show for admins */}
-                      <button
-                        onClick={() => {
-                          navigate("/admin");
-                          setShowUserMenu(false);
-                        }}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-secondary rounded-md transition-colors mb-1"
-                      >
-                        <BarChart3 className="w-4 h-4" />
-                        Admin Dashboard
-                      </button>
 
-                      <button
-                        onClick={handleSignOut}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-destructive hover:bg-destructive/10 rounded-md transition-colors"
-                      >
-                        <LogOut className="w-4 h-4" />
-                        Sign Out
-                      </button>
-                    </div>
                     <div className="p-2">
+                      {/* Admin Dashboard Link - Only show if admin */}
+                      {isAdmin && (
+                        <button
+                          onClick={() => {
+                            navigate("/admin");
+                            setShowUserMenu(false);
+                          }}
+                          className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-secondary rounded-md transition-colors mb-1"
+                        >
+                          <BarChart3 className="w-4 h-4" />
+                          Admin Dashboard
+                        </button>
+                      )}
+
+                      {/* Sign Out */}
                       <button
                         onClick={handleSignOut}
                         className="w-full flex items-center gap-2 px-3 py-2 text-sm text-destructive hover:bg-destructive/10 rounded-md transition-colors"
@@ -217,7 +254,7 @@ export default function Header() {
               )}
             </div>
 
-            {/* User Avatar - Mobile (just the circle) */}
+            {/* User Avatar - Mobile */}
             <div className="md:hidden">
               <UserAvatar size="sm" />
             </div>
@@ -239,6 +276,7 @@ export default function Header() {
               <Home className="w-4 h-4 mr-2" />
               Generate Descriptions
             </Button>
+
             <Button
               variant={location.pathname === "/history" ? "default" : "ghost"}
               className="w-full justify-start"
@@ -250,6 +288,21 @@ export default function Header() {
               <History className="w-4 h-4 mr-2" />
               History
             </Button>
+
+            {/* Admin Link - Only show for admins */}
+            {isAdmin && (
+              <Button
+                variant={location.pathname === "/admin" ? "default" : "ghost"}
+                className="w-full justify-start"
+                onClick={() => {
+                  navigate("/admin");
+                  setShowMobileMenu(false);
+                }}
+              >
+                <BarChart3 className="w-4 h-4 mr-2" />
+                Admin Dashboard
+              </Button>
+            )}
 
             {/* User Info */}
             <div className="pt-2 pb-2 px-3 border-t border-border mt-2">
@@ -264,11 +317,19 @@ export default function Header() {
                   </p>
                 </div>
               </div>
-              <div className="mb-3">
+              <div className="mb-3 flex gap-2">
                 <span className="text-xs px-2 py-1 bg-primary/10 text-primary rounded-full">
-                  Free Plan • 10/10 generations left
+                  Free Plan
                 </span>
+                {isAdmin && (
+                  <span className="text-xs px-2 py-1 bg-green-500/10 text-green-600 rounded-full flex items-center gap-1">
+                    <Shield className="w-3 h-3" />
+                    Admin
+                  </span>
+                )}
               </div>
+
+              {/* Single Sign Out Button */}
               <Button
                 variant="destructive"
                 size="sm"

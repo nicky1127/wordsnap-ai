@@ -12,6 +12,9 @@ class AdminService {
    * @param {object} options - Pagination and filter options
    * @returns {Promise<array>} Users list
    */
+  /**
+   * Get all users with stats (optimized - read from user docs)
+   */
   async getAllUsers(options = {}) {
     try {
       const {
@@ -40,29 +43,31 @@ class AdminService {
 
       const snapshot = await query.get();
 
-      const users = await Promise.all(
-        snapshot.docs.map(async (doc) => {
-          const userData = doc.data();
+      if (snapshot.empty) {
+        return [];
+      }
 
-          // Get monthly usage
-          const monthlyUsage = await this.getUserMonthlyUsage(doc.id);
+      // Build user objects directly from user documents
+      const users = snapshot.docs.map((doc) => {
+        const userData = doc.data();
+        const uid = doc.id;
 
-          return {
-            uid: doc.id,
-            email: userData.email || "",
-            displayName: userData.displayName || "",
-            role: userData.role || "user",
-            tier: userData.tier || "free",
-            monthlyQuota: this.getTierQuota(userData.tier || "free"),
-            monthlyUsed: monthlyUsage,
-            totalGenerations: userData.totalGenerations || 0,
-            createdAt: userData.createdAt?.toDate() || new Date(),
-            lastLoginAt: userData.lastLoginAt?.toDate() || null,
-            authProvider: userData.authProvider || "unknown",
-            status: userData.status || "active",
-          };
-        })
-      );
+        return {
+          uid,
+          email: userData.email || "",
+          displayName: userData.displayName || "",
+          role: userData.role || "user",
+          tier: userData.tier || "free",
+          monthlyQuota: this.getTierQuota(userData.tier || "free"),
+          monthlyUsed: userData.monthlyUsed || 0, // Read directly from user doc
+          totalGenerations: userData.totalGenerations || 0, // Read directly from user doc
+          createdAt: userData.createdAt?.toDate() || new Date(),
+          lastLoginAt: userData.lastLoginAt?.toDate() || null,
+          authProvider: userData.authProvider || "unknown",
+          status: userData.status || "active",
+          monthlyResetAt: userData.monthlyResetAt?.toDate() || null,
+        };
+      });
 
       Logger.info("Retrieved users list", { count: users.length });
       return users;
@@ -71,29 +76,6 @@ class AdminService {
       throw new Error(`Failed to get users: ${error.message}`);
     }
   }
-
-  /**
-   * Get user's monthly usage
-   */
-  async getUserMonthlyUsage(userId) {
-    try {
-      const now = new Date();
-      const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
-
-      const snapshot = await this.db
-        .collection("generations")
-        .where("userId", "==", userId)
-        .where("createdAt", ">=", Firestore.Timestamp.fromDate(firstDay))
-        .count()
-        .get();
-
-      return snapshot.data().count;
-    } catch (error) {
-      Logger.error("Failed to get user monthly usage", error);
-      return 0;
-    }
-  }
-
   /**
    * Update user role
    */
@@ -146,28 +128,19 @@ class AdminService {
   }
 
   /**
-   * Reset user monthly quota
+   * Reset user monthly quota (without deleting generations)
    */
   async resetUserQuota(userId) {
     try {
-      const now = new Date();
-      const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+      const userRef = this.db.collection("users").doc(userId);
 
-      // Delete all generations for this month
-      const snapshot = await this.db
-        .collection("generations")
-        .where("userId", "==", userId)
-        .where("createdAt", ">=", Firestore.Timestamp.fromDate(firstDay))
-        .get();
-
-      const batch = this.db.batch();
-      snapshot.docs.forEach((doc) => {
-        batch.delete(doc.ref);
+      await userRef.update({
+        monthlyUsed: 0,
+        monthlyResetAt: Firestore.FieldValue.serverTimestamp(),
       });
-      await batch.commit();
 
-      Logger.info("User quota reset", { userId, deletedCount: snapshot.size });
-      return { success: true, userId, deletedCount: snapshot.size };
+      Logger.info("User quota reset", { userId });
+      return { success: true, userId };
     } catch (error) {
       Logger.error("Failed to reset user quota", error);
       throw new Error(`Failed to reset quota: ${error.message}`);

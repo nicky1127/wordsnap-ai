@@ -1,89 +1,82 @@
-import React, { useEffect } from "react";
-import { TrendingUp } from "lucide-react";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/Card";
-import { Badge } from "@/components/ui/Badge";
-import useAppStore from "@/store/useAppStore";
+import React, { useEffect, useState } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
+import { Progress } from "@/components/ui/Progress";
+import { Zap } from "lucide-react";
 import { apiService } from "@/lib/api";
 
 export default function UsageCard() {
-  const { usageStats, setUsageStats } = useAppStore();
+  const [usage, setUsage] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadUsageStats();
+    loadUsage();
   }, []);
 
-  const loadUsageStats = async () => {
+  const loadUsage = async () => {
     try {
+      setLoading(true);
       const response = await apiService.getUsageStats();
-      setUsageStats(response.data);
+      setUsage(response.data);
     } catch (error) {
-      console.error("Failed to load usage stats:", error);
+      console.error("Failed to load usage:", error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  if (!usageStats) {
-    return null;
+  if (loading) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Zap className="w-5 h-5" />
+            Usage This Month
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-center py-4">
+            <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
+          </div>
+        </CardContent>
+      </Card>
+    );
   }
 
-  const { currentUsage, limit, remaining, tier } = usageStats;
-  const percentUsed = limit === "unlimited" ? 0 : (currentUsage / limit) * 100;
+  const { monthlyUsed = 0, monthlyQuota = 10, tier = "free" } = usage || {};
+  const percentage =
+    monthlyQuota === -1 ? 0 : (monthlyUsed / monthlyQuota) * 100;
+  const isUnlimited = monthlyQuota === -1;
 
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle>Usage This Month</CardTitle>
-            <CardDescription>Your generation stats</CardDescription>
-          </div>
-          <Badge variant={tier === "free" ? "secondary" : "default"}>
-            {tier.toUpperCase()}
-          </Badge>
-        </div>
+        <CardTitle className="flex items-center gap-2">
+          <Zap className="w-5 h-5" />
+          Usage This Month
+        </CardTitle>
       </CardHeader>
-      <CardContent>
-        <div className="space-y-4">
-          {/* Usage Bar */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-2xl font-bold">{currentUsage}</span>
-              <span className="text-sm text-muted-foreground">
-                {limit === "unlimited" ? "∞" : `/ ${limit}`}
-              </span>
-            </div>
-            {limit !== "unlimited" && (
-              <div className="w-full bg-secondary rounded-full h-2">
-                <div
-                  className="bg-primary rounded-full h-2 transition-all"
-                  style={{ width: `${Math.min(percentUsed, 100)}%` }}
-                />
-              </div>
-            )}
+      <CardContent className="space-y-4">
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-2xl font-bold">{monthlyUsed}</span>
+            <span className="text-sm text-muted-foreground">
+              {isUnlimited ? "Unlimited" : `/ ${monthlyQuota} generations`}
+            </span>
           </div>
+          {!isUnlimited && <Progress value={percentage} className="h-2" />}
+        </div>
 
-          {/* Remaining */}
-          {remaining !== "unlimited" && (
-            <div className="flex items-center gap-2 text-sm">
-              <TrendingUp className="w-4 h-4 text-accent" />
-              <span className="text-muted-foreground">
-                {remaining} generations remaining
-              </span>
-            </div>
+        <div className="text-sm text-muted-foreground">
+          <p className="capitalize">{tier} Plan</p>
+          {!isUnlimited && monthlyQuota - monthlyUsed > 0 && (
+            <p className="text-primary font-medium mt-1">
+              {monthlyQuota - monthlyUsed} generations remaining
+            </p>
           )}
-
-          {/* Upgrade CTA */}
-          {tier === "free" && percentUsed > 70 && (
-            <div className="p-3 bg-accent/10 border border-accent/20 rounded-lg">
-              <p className="text-sm font-medium text-accent">
-                Running low? Upgrade for unlimited! ⚡
-              </p>
-            </div>
+          {!isUnlimited && monthlyUsed >= monthlyQuota && (
+            <p className="text-destructive font-medium mt-1">
+              Quota reached - Upgrade to continue
+            </p>
           )}
         </div>
       </CardContent>

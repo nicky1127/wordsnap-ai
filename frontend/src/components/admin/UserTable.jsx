@@ -6,6 +6,7 @@ import {
   Ban,
   CheckCircle,
   MoreVertical,
+  Download,
 } from "lucide-react";
 import {
   Card,
@@ -27,6 +28,51 @@ export default function UserTable() {
   useEffect(() => {
     loadUsers();
   }, []);
+
+  const exportToCSV = () => {
+    const headers = [
+      "Email",
+      "Name",
+      "Role",
+      "Tier",
+      "Monthly Used",
+      "Monthly Quota",
+      "Total Generations",
+      "Auth Provider",
+      "Status",
+      "Joined",
+      "Last Login",
+    ];
+
+    const rows = users.map((user) => [
+      user.email,
+      user.displayName || "",
+      user.role,
+      user.tier,
+      user.monthlyUsed,
+      user.monthlyQuota === -1 ? "Unlimited" : user.monthlyQuota,
+      user.totalGenerations,
+      user.authProvider,
+      user.status,
+      formatDate(user.createdAt),
+      formatDate(user.lastLoginAt),
+    ]);
+
+    const csvContent = [
+      headers.join(","),
+      ...rows.map((row) => row.map((cell) => `"${cell}"`).join(",")),
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `wordsnap-users-${new Date().toISOString().split("T")[0]}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+
+    toast.success("User data exported to CSV");
+  };
 
   const loadUsers = async () => {
     try {
@@ -130,10 +176,18 @@ export default function UserTable() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>User Management</CardTitle>
-        <CardDescription>
-          Manage user roles, tiers, and quotas ({users.length} total users)
-        </CardDescription>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle>User Management</CardTitle>
+            <CardDescription>
+              Manage user roles, tiers, and quotas ({users.length} total users)
+            </CardDescription>
+          </div>
+          <Button variant="outline" onClick={exportToCSV}>
+            <Download className="w-4 h-4 mr-2" />
+            Export CSV
+          </Button>
+        </div>
       </CardHeader>
       <CardContent>
         <div className="overflow-x-auto">

@@ -24,7 +24,7 @@ const upload = multer({
 });
 
 /**
- * Generate product description from multiple images
+ * Generate product descriptions
  * POST /api/generate
  */
 router.post(
@@ -34,15 +34,16 @@ router.post(
   upload.array("images", 5),
   async (req, res, next) => {
     try {
-      // Validate request
+      const { productName, category, specs, tone, condition, quantity } =
+        req.body;
+
+      // Validation
       if (!req.files || req.files.length === 0) {
         return res.status(400).json({
           success: false,
-          error: { message: "No image files provided" },
+          error: { message: "At least one product image is required" },
         });
       }
-      const { productName, category, specs, tone, condition, quantity } =
-        req.body;
 
       if (!productName) {
         return res.status(400).json({
@@ -54,84 +55,90 @@ router.post(
       Logger.info("Generation request received", {
         userId: req.user.uid,
         productName,
-        category,
-        tone,
         imageCount: req.files.length,
-        totalSize: req.files.reduce((sum, f) => sum + f.size, 0),
       });
 
-      // Upload all images to Cloud Storage
-      const uploadPromises = req.files.map((file) =>
-        storageService.uploadImage(
+      // Upload images to Cloud Storage
+      const imageBase64Array = [];
+      const publicUrls = [];
+
+      for (const file of req.files) {
+        const base64 = storageService.bufferToBase64(file.buffer);
+        imageBase64Array.push(base64);
+
+        const publicUrl = await storageService.uploadImage(
           file.buffer,
-          file.originalname,
-          file.mimetype
-        )
-      );
-      const uploadResults = await Promise.all(uploadPromises);
+          req.user.uid,
+          file.originalname
+        );
+        publicUrls.push(publicUrl);
+      }
 
-      // Convert all images to base64 for Vertex AI
-      const imageBase64Array = req.files.map((file) =>
-        storageService.bufferToBase64(file.buffer)
-      );
-
-      // Generate descriptions using Vertex AI (with all images)
-      const aiResult = await vertexAIService.generateProductDescription(
+      // Generate descriptions using Vertex AI
+      const result = await vertexAIService.generateProductDescription(
         imageBase64Array,
         {
           productName,
-          category: category || "General",
-          specs: specs || "",
+          category,
+          specs,
           tone: tone || "professional",
-          condition: condition || "new", // NEW
-          quantity: quantity || "multiple", // NEW
+          condition: condition || "new",
+          quantity: quantity || "multiple",
         }
       );
 
-      // Save generation to Firestore
-      const savedGeneration = await firestoreService.saveGeneration({
+      if (!result.success) {
+        throw new Error("Failed to generate descriptions");
+      }
+
+      const descriptions = result.data;
+
+      // Save to Firestore
+      const generationDoc = await firestoreService.saveGeneration({
         userId: req.user.uid,
         productName,
-        productInfo: {
-          category,
-          specs,
-        },
-        imageUrls: uploadResults.map((r) => r.url),
-        imageUrl: uploadResults[0].url,
-        descriptions: aiResult.data,
+        category,
         tone: tone || "professional",
-        condition: condition || "new", // NEW
-        quantity: quantity || "multiple", // NEW
+        condition: condition || "new",
+        quantity: quantity || "multiple",
+        descriptions,
+        imageUrls: publicUrls,
       });
-      // Track usage
-      await firestoreService.trackUsage(req.user.uid);
 
-      // Increment user's total generation count
-      await firestoreService.incrementUserGenerations(req.user.uid);
+      // CRITICAL: Increment user's generation counters
+      try {
+        await firestoreService.incrementUserGenerations(req.user.uid);
+        Logger.info("User generation count incremented", {
+          userId: req.user.uid,
+        });
+      } catch (incrementError) {
+        // Log error but don't fail the request
+        Logger.error("Failed to increment user generations", incrementError, {
+          userId: req.user.uid,
+          generationId: generationDoc.id,
+        });
+      }
 
-      // Return response
+      Logger.info("Description generated successfully", {
+        userId: req.user.uid,
+        generationId: generationDoc.id,
+        productName,
+      });
+
       res.json({
         success: true,
-        message: `Boom. Analyzed ${req.files.length} image${
-          req.files.length > 1 ? "s" : ""
-        }. Fresh copy ready! 💰`,
         data: {
-          generationId: savedGeneration.id,
-          imageUrls: uploadResults.map((r) => r.url),
-          imageUrl: uploadResults[0].url,
-          descriptions: aiResult.data,
-          metadata: {
-            ...aiResult.metadata,
-            imageCount: req.files.length,
-          },
+          id: generationDoc.id,
+          descriptions,
+          imageUrls: publicUrls,
+          metadata: result.metadata,
         },
+        message: "Product descriptions generated successfully",
       });
     } catch (error) {
       Logger.error("Generation failed", error, {
         userId: req.user?.uid,
-        productName: req.body?.productName,
       });
-
       next(error);
     }
   }
@@ -202,6 +209,24 @@ router.get("/history", authenticate, async (req, res, next) => {
       userId: req.user?.uid,
     });
 
+    next(error);
+  }
+});
+
+/**
+ * Get current user's usage stats
+ * GET /api/generate/usage/stats
+ */
+router.get("/usage/stats", authenticate, async (req, res, next) => {
+  try {
+    const stats = await firestoreService.getUserUsageStats(req.user.uid);
+
+    res.json({
+      success: true,
+      data: stats,
+    });
+  } catch (error) {
+    Logger.error("Failed to get usage stats", error);
     next(error);
   }
 });
