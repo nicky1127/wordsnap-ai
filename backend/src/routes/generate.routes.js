@@ -152,47 +152,51 @@ router.post(
   }
 );
 /**
- * Analyze product image (extract features)
+ * Analyze product image (extract features) - PUBLIC DEMO
  * POST /api/generate/analyze
  */
-router.post(
-  "/analyze",
-  authenticate,
-  upload.single("image"),
-  async (req, res, next) => {
-    try {
-      if (!req.file) {
-        return res.status(400).json({
-          success: false,
-          error: { message: "No image file provided" },
-        });
-      }
-
-      Logger.info("Image analysis request received", {
-        userId: req.user.uid,
-        fileSize: req.file.size,
+router.post("/analyze", upload.single("image"), async (req, res, next) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        error: { message: "No image file provided" },
       });
-
-      // Convert image to base64
-      const imageBase64 = storageService.bufferToBase64(req.file.buffer);
-
-      // Analyze image
-      const analysis = await vertexAIService.analyzeProductImage(imageBase64);
-
-      res.json({
-        success: true,
-        message: "Image analyzed successfully",
-        data: analysis,
-      });
-    } catch (error) {
-      Logger.error("Image analysis failed", error, {
-        userId: req.user?.uid,
-      });
-
-      next(error);
     }
+
+    Logger.info("Image analysis request received (public demo)", {
+      fileSize: req.file.size,
+      fileName: req.file.originalname,
+    });
+
+    // Convert image to base64
+    const imageBase64 = storageService.bufferToBase64(req.file.buffer);
+
+    // Analyze image
+    const analysis = await vertexAIService.analyzeProductImage(imageBase64);
+
+    Logger.info("Image analysis complete (public demo)", {
+      hasCategory: !!analysis.category,
+      hasColors: !!analysis.colors,
+      hasFeatures: !!analysis.features,
+    });
+
+    res.json({
+      success: true,
+      message: "Image analyzed successfully",
+      data: analysis,
+    });
+  } catch (error) {
+    Logger.error("Image analysis failed", error);
+
+    res.status(500).json({
+      success: false,
+      error: {
+        message: "Failed to analyze image. Please try again.",
+      },
+    });
   }
-);
+});
 
 /**
  * Get user's generation history
